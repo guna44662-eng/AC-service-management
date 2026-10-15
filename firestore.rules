@@ -1,0 +1,143 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global helper primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && request.auth.token.email == 'guna44662@gmail.com';
+    }
+
+    function isStaff() {
+      return isVerified();
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isStaff() && (request.auth.uid == userId || isBootstrappedAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isStaff() && request.auth.uid == userId
+        && incoming().id == userId
+        && incoming().email is string
+        && (!('role' in incoming()) || incoming().role in ['admin', 'technician']);
+      allow update: if isStaff() && (
+        isBootstrappedAdmin() || 
+        (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt']))
+      );
+      allow delete: if isBootstrappedAdmin();
+    }
+
+    // Business Settings Collection
+    match /businessSettings/{settingsId} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+
+    // Customers Collection
+    match /customers/{customerId} {
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && incoming().fullName is string && incoming().fullName.size() > 0 && incoming().fullName.size() <= 100
+        && incoming().mobileNumber is string && incoming().mobileNumber.size() >= 7 && incoming().mobileNumber.size() <= 20
+        && incoming().address is string && incoming().address.size() > 0 && incoming().address.size() <= 300;
+      allow update: if isStaff();
+      allow delete: if isStaff();
+    }
+
+    // AC Units Collection
+    match /acUnits/{acUnitId} {
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && incoming().customerId is string && incoming().customerId.size() > 0
+        && incoming().brand is string && incoming().brand.size() > 0 && incoming().brand.size() <= 60
+        && incoming().acType in ['Split', 'Window', 'Inverter Split', 'Other']
+        && incoming().capacity in ['1 ton', '1.5 ton', '2 ton', 'Other'];
+      allow update: if isStaff();
+      allow delete: if isStaff();
+    }
+
+    // Services Collection
+    match /services/{serviceId} {
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && incoming().customerId is string && incoming().customerId.size() > 0
+        && incoming().acUnitId is string && incoming().acUnitId.size() > 0
+        && incoming().serviceDate is string
+        && incoming().serviceType in ['General Service', 'Deep Cleaning', 'Gas Refilling', 'Repair', 'Installation', 'Uninstallation', 'Maintenance', 'Other']
+        && incoming().totalAmount is number && incoming().totalAmount >= 0;
+      allow update: if isStaff();
+      allow delete: if isStaff();
+    }
+
+    // Appointments Collection
+    match /appointments/{appointmentId} {
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && incoming().customerId is string && incoming().customerId.size() > 0
+        && incoming().customerName is string && incoming().customerName.size() > 0
+        && incoming().customerPhone is string && incoming().customerPhone.size() >= 7
+        && incoming().appointmentDate is string
+        && incoming().status in ['Scheduled', 'In Progress', 'Completed', 'Cancelled'];
+      allow update: if isStaff();
+      allow delete: if isStaff();
+    }
+
+    // Parts Collection
+    match /parts/{partId} {
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && incoming().name is string && incoming().name.size() > 0 && incoming().name.size() <= 100
+        && incoming().quantity is number && incoming().quantity > 0
+        && incoming().unitPrice is number && incoming().unitPrice >= 0;
+      allow update: if isStaff();
+      allow delete: if isStaff();
+    }
+
+    // Invoices Collection
+    match /invoices/{invoiceId} {
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && incoming().invoiceNumber is string && incoming().invoiceNumber.size() > 0
+        && incoming().customerId is string && incoming().customerId.size() > 0
+        && incoming().totalAmount is number && incoming().totalAmount >= 0;
+      allow update: if isStaff();
+      allow delete: if isBootstrappedAdmin();
+    }
+
+    // Payments Collection
+    match /payments/{paymentId} {
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && incoming().invoiceId is string && incoming().invoiceId.size() > 0
+        && incoming().customerId is string && incoming().customerId.size() > 0
+        && incoming().amount is number && incoming().amount > 0;
+      allow update: if isBootstrappedAdmin();
+      allow delete: if isBootstrappedAdmin();
+    }
+  }
+}

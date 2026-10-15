@@ -1,0 +1,6 @@
+{
+  "name": "CoolCare Pro - AC Home Service Management",
+  "description": "Complete AC home service management system for technicians: track customers, AC units, service logs, appointments, spare parts, payments, and generate PDF invoices.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
